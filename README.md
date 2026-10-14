@@ -14,11 +14,13 @@ cd knowledge-learn
 ```
 knowledge-learn/
 ├── docs/                  讲解 / 练习 / 对应题目（按分类）
+│   └── 06-项目练习/       社区单体 → 微服务拆分 → 秒杀与库存一致性
 ├── java-basics-learn/     Java、MySQL 概念、Redis 概念、网络拆包等 Demo
 └── spring-learn/          IoC、循环依赖、FactoryBean Demo（不启动 Web）
 ```
 
 学习顺序看 [docs/README.md](docs/README.md)。建议从 [docs/01-java/01-list-array](docs/01-java/01-list-array/README.md) 起。  
+项目需求在 [docs/06-项目练习](docs/06-项目练习/README.md)，原理没把握时先回到 01～05。  
 题库怎么拆进分类：[docs/题库分析.md](docs/题库分析.md)。
 
 ## 跑 Java Demo
