@@ -3,7 +3,7 @@
 [← 总目录](../README.md)
 
 把前面的 Java / MySQL / Redis / Spring / MQ 收成一个能跑、能压、能讲的系统。  
-本目录是**需求与验收**，业务代码另建工程（建议仓库下 `community-hub/`），不要写进 `docs/`。
+本目录是**需求与验收**。业务代码在同级的 [`community-hub/`](community-hub/README.md)。
 
 原理没把握时回到对应知识点，做完再回到这里对验收，不要在项目里现翻概念。
 
