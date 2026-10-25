@@ -21,8 +21,8 @@ class HealthControllerTest {
     void healthReturnsEnvelope() throws Exception {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.message").value("ok"))
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.message").value("成功"))
                 .andExpect(jsonPath("$.data.service").value("community-hub"));
     }
 }

@@ -11,12 +11,10 @@
 
 ## 后端
 
-需要本机 JDK 21。
+需要本机 JDK 21。在本目录执行：
 
 ```bash
-export JAVA_HOME=$(/usr/libexec/java_home -v 21)
-cd backend
-mvn spring-boot:run
+./backend/start.sh
 ```
 
 接口：`GET http://localhost:8080/api/health`，响应为 `code / message / data`。
