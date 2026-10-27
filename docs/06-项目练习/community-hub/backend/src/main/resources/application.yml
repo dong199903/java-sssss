@@ -11,6 +11,11 @@ spring:
     username: root
     password: ""
 
+community:
+  jwt:
+    secret: community-hub-dev-secret-key-32b
+    expire-days: 7
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
