@@ -14,7 +14,7 @@ cd knowledge-learn
 ```
 knowledge-learn/
 ├── docs/                  讲解 / 练习 / 对应题目（按分类）
-│   └── 06-项目练习/       社区单体 → 微服务拆分 → 秒杀与库存一致性
+│   └── 06-项目练习/       社区单体 → 微服务拆分 → 秒杀与库存一致性 → 岗位补强 → 分库分表
 ├── java-basics-learn/     Java、MySQL 概念、Redis 概念、网络拆包等 Demo
 └── spring-learn/          IoC、循环依赖、FactoryBean Demo（不启动 Web）
 ```
