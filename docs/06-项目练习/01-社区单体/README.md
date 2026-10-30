@@ -56,7 +56,7 @@
 | 密码 | BCrypt。日志和响应里不出现明文密码和密码哈希 |
 | 时间 | 数据库 `DATETIME`，应用用 `LocalDateTime`，时区 Asia/Shanghai |
 
-## 5. 表（恰好 10 张）
+## 5. 表（恰好 9 张）
 
 ```sql
 CREATE TABLE user (
@@ -96,7 +96,7 @@ CREATE TABLE post (
     updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_community_created (community_id, created_at),
     KEY idx_geohash (geohash),
-    KEY idx_author (author_id)
+    KEY idx_author (auth
 ) ENGINE=InnoDB;
 
 CREATE TABLE comment (
@@ -226,7 +226,7 @@ CREATE TABLE admin_op_log (
 
 禁止先改缓存再改库。删详情 key 失败时记错误日志，并有一次定时补偿：按最近更新的帖子再删一次详情 key。补偿可以简单做成每分钟扫描 `updated_at` 在最近 2 分钟的帖子。
 
-**C-SCAN** 清理某个小区的列表缓存使用 `SCAN`，`MATCH post:list:{communityId}:*`，`COUNT` 100，然后删除扫到的 key。代码和运行日志里都不允许出现 `KEYS`。
+**C-SCAN** 清理某个小区的列表缓存使用 `SCAN`，`MATCH post:list:{communityId}:`*，`COUNT` 100，然后删除扫到的 key。代码和运行日志里都不允许出现 `KEYS`。
 
 ## 8. 点赞、评论、收藏
 
@@ -354,7 +354,7 @@ CREATE TABLE admin_op_log (
 
 全部勾选才进入微服务阶段。
 
-- [ ] 10 张表与第 5 节约束一致，L1 L2 通过，L3 做过并修回
+- [ ] 9 张表与第 5 节约束一致，L1 L2 通过，L3 做过并修回
 - [ ] C-NIL、C-LOCK、C-TTL、C-DEL、C-SCAN 通过
 - [ ] K-IDEM、R-DECAY、R-REBUILD、V1、V2 通过
 - [ ] N-ASYNC、N-BATCH、N-DEDUP 通过，死信队列在连续失败时能收到消息

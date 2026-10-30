@@ -33,4 +33,18 @@ public class JwtService {
                 .signWith(key)
                 .compact();
     }
+
+    public Long parseUserId(String authorization) {
+      if (authorization == null || !authorization.startsWith("Bearer ")) {
+          throw new IllegalArgumentException("未登录");
+      }
+      String token = authorization.substring("Bearer ".length());
+      String subject = Jwts.parser()
+              .verifyWith(key)
+              .build()
+              .parseSignedClaims(token)
+              .getPayload()
+              .getSubject();
+      return Long.valueOf(subject);
+  }
 }

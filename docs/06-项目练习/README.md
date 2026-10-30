@@ -47,7 +47,7 @@ Java 21、Spring Boot 3.2、MyBatis-Plus、MySQL 8、Redis 7、Redisson、Rabbit
 | Java 21 | 编译版本；入参、出参用 `record` | 01 | `java -version` 为 21，接口 DTO 是 record |
 | Spring Boot 3.2 | Web、校验、声明式事务、`@Scheduled` | 01 | 浏览刷库、热榜衰减由应用内定时任务触发 |
 | MyBatis-Plus | 分页、条件构造、雪花主键 | 01 | 列表分页不手写 limit 拼接 |
-| MySQL 8 | 10 张表、唯一索引、二级索引、事务 | 01 | `EXPLAIN` 里列表和附近查询不是全表扫描 |
+| MySQL 8 | 9 张表、唯一索引、二级索引、事务 | 01 | `EXPLAIN` 里列表和附近查询不是全表扫描 |
 | Redis 7 | 详情/列表缓存、`INCR`、ZSET | 01 | 热点详情第二次请求不打数据库 |
 | Redisson | 击穿互斥锁、双重检查 | 01 | 缓存失效瞬间只有一个请求回源建缓存 |
 | 穿透 | 空值标记、短 TTL | 01 | 不存在的帖子 id 连续请求不反复打库 |

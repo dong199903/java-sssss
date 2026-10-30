@@ -3,7 +3,7 @@ package org.example.community.service;
 import org.example.community.entity.User;
 import org.example.community.mapper.UserMapper;
 import org.springframework.stereotype.Service;
-
+import org.example.community.dto.UserDto;
 
 @Service
 public class UserService {
@@ -23,5 +23,12 @@ public class UserService {
     }
     public User getUserByUsername(String username) {
         return userMapper.selectByUsername(username);
+    }
+    public UserDto getUserById(Long id) {
+        User user = userMapper.selectById(id);
+        if (user == null) {
+            return null;
+        }
+        return new UserDto(user.getId(), user.getUsername(), user.getPasswordHash(), user.getNickname(), user.getCityCode(), user.getRole());
     }
 }

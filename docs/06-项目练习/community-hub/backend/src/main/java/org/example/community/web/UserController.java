@@ -14,14 +14,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/users")
+@RequestMapping("/api/auth/")
 public class UserController {
   @Autowired
   private UserService userService;
   @Autowired
   private JwtService jwtService;
 
-  @PostMapping("/create")
+  @PostMapping("/register")
   public ApiResponse<String> createUser(@RequestBody UserDto userDto) {
     /**
      * 1. 参数校验：验证用户名、密码、昵称、城市代码、角色是否符合要求
