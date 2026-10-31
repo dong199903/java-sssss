@@ -44,4 +44,26 @@ public final class GeoHash {
         }
         return hash.toString();
     }
+
+    public static String nextPrefix(String prefix) {
+        char[] chars = prefix.toCharArray();
+        for (int i = chars.length - 1; i >= 0; i--) {
+            int index = indexOf(chars[i]);
+            if (index < BASE32.length - 1) {
+                chars[i] = BASE32[index + 1];
+                return new String(chars);
+            }
+            chars[i] = BASE32[0];
+        }
+        return null;
+    }
+
+    private static int indexOf(char c) {
+        for (int i = 0; i < BASE32.length; i++) {
+            if (BASE32[i] == c) {
+                return i;
+            }
+        }
+        return BASE32.length - 1;
+    }
 }

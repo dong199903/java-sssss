@@ -6,4 +6,27 @@
         INSERT INTO post (id, community_id, author_id, title, content, latitude, longitude, geohash)
         VALUES (#{id}, #{communityId}, #{authorId}, #{title}, #{content}, #{latitude}, #{longitude}, #{geohash})
     </insert>
+    <select id="selectByCommunityId" resultType="org.example.community.entity.Post">
+        SELECT * FROM post
+        WHERE community_id = #{communityId}
+        <if test="lastCreateTime != null and lastId != null">
+            AND (created_at &lt; #{lastCreateTime}
+                 OR (created_at = #{lastCreateTime} AND id &lt; #{lastId}))
+        </if>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{pageSize}
+    </select>
+    <select id="selectNearby" resultType="org.example.community.entity.Post">
+        SELECT id, community_id, author_id, title, content, latitude, longitude, geohash,
+               created_at AS create_time, updated_at AS update_time
+        FROM post
+        WHERE geohash &gt;= #{geohashStart}
+          AND geohash &lt; #{geohashEnd}
+        <if test="lastCreateTime != null and lastId != null">
+            AND (created_at &lt; #{lastCreateTime}
+                 OR (created_at = #{lastCreateTime} AND id &lt; #{lastId}))
+        </if>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{pageSize}
+    </select>
 </mapper>
