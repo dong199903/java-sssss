@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 @TableName("admin_op_log")
 public class AdminOpLog {
@@ -16,4 +18,5 @@ public class AdminOpLog {
     private String targetType;
     private Long targetId;
     private String detail;
+    private LocalDateTime createdAt;
 }
