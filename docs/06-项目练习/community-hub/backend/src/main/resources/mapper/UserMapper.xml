@@ -7,4 +7,8 @@
         FROM `user`
         WHERE username = #{username}
     </select>
+    <insert id="insertFollow">
+        INSERT INTO user_follow (id, follower_id, followee_id)
+        VALUES (#{id}, #{followerId}, #{followeeId})
+    </insert>
 </mapper>

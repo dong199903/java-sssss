@@ -3,6 +3,7 @@ package org.example.community.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.example.community.dto.CommentDto;
 import org.example.community.entity.Post;
 import java.util.List;
 import java.util.Date;
@@ -20,4 +21,22 @@ public interface PostMapper extends BaseMapper<Post> {
           @Param("title") String title, @Param("content") String content);
 
   int deletePost(Long id);
+
+  int likePost(Long likeId, Long postId, Long userId);
+  int updateLikeCount(Long id, int count);
+  int deleteLike(Long postId, Long userId);
+  int decreaseLikeCount(Long id);
+
+  int favoritePost(Long favoriteId, Long postId, Long userId);
+  int updateFavoriteCount(Long id, int count);
+  int deleteFavorite(Long postId, Long userId);
+  int decreaseFavoriteCount(Long id);
+
+  int insertComment(@Param("id") Long id, @Param("postId") Long postId,
+          @Param("authorId") Long authorId, @Param("content") String content);
+
+  int increaseCommentCount(Long id);
+
+  List<CommentDto> selectComments(@Param("postId") Long postId, @Param("pageSize") int pageSize,
+          @Param("lastCreateTime") Date lastCreateTime, @Param("lastId") Long lastId);
 }

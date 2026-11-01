@@ -3,6 +3,7 @@ package org.example.community.service;
 import java.util.List;
 import java.util.ArrayList;
 import org.example.community.common.GeoHash;
+import org.example.community.dto.CommentDto;
 import org.example.community.dto.PostDto;
 import org.example.community.dto.UserDto;
 import org.example.community.entity.AdminOpLog;
@@ -12,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.example.community.mapper.PostMapper;
 import org.example.community.entity.Post;
 import java.util.Date;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import org.springframework.dao.DuplicateKeyException;
 
 @Service
 public class PostService {
@@ -140,5 +143,89 @@ public class PostService {
   private String deleteDetail(String title) {
     String detail = "删除帖子：" + title;
     return detail.length() <= 500 ? detail : detail.substring(0, 500);
+  }
+
+  @Transactional
+  public int likePost(Long userId, Long id) {
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      return 2;
+    }
+    try {
+      postMapper.likePost(IdWorker.getId(), id, userId);
+    } catch (DuplicateKeyException ex) {
+      return -1;
+    }
+    return postMapper.updateLikeCount(id, 1) > 0 ? 1 : 0;
+  }
+
+  @Transactional
+  public int unlikePost(Long userId, Long id) {
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      return 2;
+    }
+    if (postMapper.deleteLike(id, userId) <= 0) {
+      return -1;
+    }
+    if (postMapper.decreaseLikeCount(id) <= 0) {
+      throw new IllegalStateException("点赞计数更新失败");
+    }
+    return 1;
+  }
+
+  @Transactional
+  public int favoritePost(Long userId, Long id) {
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      return 2;
+    }
+    try {
+      postMapper.favoritePost(IdWorker.getId(), id, userId);
+    } catch (DuplicateKeyException ex) {
+      return -1;
+    }
+    return postMapper.updateFavoriteCount(id, 1) > 0 ? 1 : 0;
+  }
+
+  @Transactional
+  public int unfavoritePost(Long userId, Long id) {
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      return 2;
+    }
+    if (postMapper.deleteFavorite(id, userId) <= 0) {
+      return -1;
+    }
+    if (postMapper.decreaseFavoriteCount(id) <= 0) {
+      throw new IllegalStateException("收藏计数更新失败");
+    }
+    return 1;
+  }
+
+  @Transactional
+  public int addComment(Long userId, Long id, String content) {
+    if (content == null || content.isBlank()) {
+      return 3;
+    }
+    if (content.length() > 1000) {
+      return 4;
+    }
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      return 2;
+    }
+    postMapper.insertComment(IdWorker.getId(), id, userId, content.trim());
+    if (postMapper.increaseCommentCount(id) <= 0) {
+      throw new IllegalStateException("评论计数更新失败");
+    }
+    return 1;
+  }
+
+  public List<CommentDto> getComments(Long id, Date lastCreateTime, Long lastId) {
+    if (postMapper.selectPostById(id) == null) {
+      return null;
+    }
+    return postMapper.selectComments(id, 20, lastCreateTime, lastId);
   }
 }

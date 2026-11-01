@@ -43,4 +43,61 @@
     <delete id="deletePost">
         DELETE FROM post WHERE id = #{id}
     </delete>
+    <insert id="likePost">
+        INSERT INTO post_like (id,post_id, user_id)
+        VALUES (#{likeId}, #{postId}, #{userId})
+    </insert>
+    <update id="updateLikeCount">
+        UPDATE post
+        SET like_count = like_count + #{count}
+        WHERE id = #{id}
+    </update>
+    <delete id="deleteLike">
+        DELETE FROM post_like
+        WHERE post_id = #{postId} AND user_id = #{userId}
+    </delete>
+    <update id="decreaseLikeCount">
+        UPDATE post
+        SET like_count = like_count - 1
+        WHERE id = #{id} AND like_count &gt; 0
+    </update>
+    <insert id="favoritePost">
+        INSERT INTO post_favorite (id, post_id, user_id)
+        VALUES (#{favoriteId}, #{postId}, #{userId})
+    </insert>
+    <update id="updateFavoriteCount">
+        UPDATE post
+        SET favorite_count = favorite_count + #{count}
+        WHERE id = #{id}
+    </update>
+    <delete id="deleteFavorite">
+        DELETE FROM post_favorite
+        WHERE post_id = #{postId} AND user_id = #{userId}
+    </delete>
+    <update id="decreaseFavoriteCount">
+        UPDATE post
+        SET favorite_count = favorite_count - 1
+        WHERE id = #{id} AND favorite_count &gt; 0
+    </update>
+    <insert id="insertComment">
+        INSERT INTO comment (id, post_id, author_id, content)
+        VALUES (#{id}, #{postId}, #{authorId}, #{content})
+    </insert>
+    <update id="increaseCommentCount">
+        UPDATE post
+        SET comment_count = comment_count + 1
+        WHERE id = #{id}
+    </update>
+    <select id="selectComments" resultType="org.example.community.dto.CommentDto">
+        SELECT c.id, c.content, c.author_id AS user_id, u.nickname, c.created_at AS create_time
+        FROM comment c
+        LEFT JOIN `user` u ON u.id = c.author_id
+        WHERE c.post_id = #{postId}
+        <if test="lastCreateTime != null and lastId != null">
+            AND (c.created_at &lt; #{lastCreateTime}
+                 OR (c.created_at = #{lastCreateTime} AND c.id &lt; #{lastId}))
+        </if>
+        ORDER BY c.created_at DESC, c.id DESC
+        LIMIT #{pageSize}
+    </select>
 </mapper>

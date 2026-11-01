@@ -10,4 +10,6 @@ public interface UserMapper extends BaseMapper<User> {
   int insert(User user);
 
   User selectByUsername(@Param("username") String username);
+
+  int insertFollow(@Param("id") Long id, @Param("followerId") Long followerId, @Param("followeeId") Long followeeId);
 }

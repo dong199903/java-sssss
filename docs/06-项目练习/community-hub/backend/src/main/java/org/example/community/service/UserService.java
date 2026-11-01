@@ -2,8 +2,10 @@ package org.example.community.service;
 
 import org.example.community.entity.User;
 import org.example.community.mapper.UserMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.example.community.dto.UserDto;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 
 @Service
 public class UserService {
@@ -30,5 +32,20 @@ public class UserService {
             return null;
         }
         return new UserDto(user.getId(), user.getUsername(), user.getPasswordHash(), user.getNickname(), user.getCityCode(), user.getRole());
+    }
+
+    public int follow(Long followerId, Long followeeId) {
+        if (followerId.equals(followeeId)) {
+            return 2;
+        }
+        if (getUserById(followeeId) == null) {
+            return 3;
+        }
+        try {
+            userMapper.insertFollow(IdWorker.getId(), followerId, followeeId);
+        } catch (DuplicateKeyException ex) {
+            return -1;
+        }
+        return 1;
     }
 }

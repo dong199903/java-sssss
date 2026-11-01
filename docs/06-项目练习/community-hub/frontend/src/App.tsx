@@ -1,32 +1,83 @@
 import { useEffect, useState } from 'react'
+import { HotPage, DetailPage, EditorPage, ListPage, LoginPage, NearbyPage, NoticePage, RegisterPage } from './pages.tsx'
+import { Link, Router, useGo, usePath } from './router.tsx'
+import { clearSession, token, username } from './session.ts'
 
-type Health = {
-  code: number
-  message: string
-  data: { service: string }
-}
-
-function App() {
-  const [text, setText] = useState('正在连接后端…')
+function Shell() {
+  const path = usePath()
+  const go = useGo()
+  const [name, setName] = useState(username())
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE}/health`)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(String(res.status))
-        }
-        return res.json() as Promise<Health>
-      })
-      .then((body) => setText(`${body.data.service}：${body.message}`))
-      .catch(() => setText('后端未启动，先在 backend 目录运行 mvn spring-boot:run'))
+    const sync = () => setName(username())
+    window.addEventListener('community-session', sync)
+    return () => window.removeEventListener('community-session', sync)
   }, [])
 
+  const page = match(path)
+
   return (
-    <main>
-      <h1>社区练习</h1>
-      <p>{text}</p>
-    </main>
+    <>
+      <header className="nav">
+        <Link to="/">社区</Link>
+        <Link to="/nearby">附近</Link>
+        <Link to="/posts/new">发帖</Link>
+        <Link to="/hot">热榜</Link>
+        <Link to="/notifications">通知</Link>
+        {name ? (
+          <button
+            type="button"
+            className="linkish"
+            onClick={() => {
+              clearSession()
+              go('/login')
+            }}
+          >
+            {name} 退出
+          </button>
+        ) : (
+          <Link to="/login">登录</Link>
+        )}
+      </header>
+      <main>{token() || page.public ? page.node : <LoginPage />}</main>
+    </>
   )
 }
 
-export default App
+function match(path: string) {
+  if (path === '/login') {
+    return { public: true, node: <LoginPage /> }
+  }
+  if (path === '/register') {
+    return { public: true, node: <RegisterPage /> }
+  }
+  if (path === '/nearby') {
+    return { public: true, node: <NearbyPage /> }
+  }
+  if (path === '/hot') {
+    return { public: true, node: <HotPage /> }
+  }
+  if (path === '/posts/new') {
+    return { public: false, node: <EditorPage /> }
+  }
+  const edit = path.match(/^\/posts\/(\d+)\/edit$/)
+  if (edit) {
+    return { public: false, node: <EditorPage id={edit[1]} /> }
+  }
+  const detail = path.match(/^\/posts\/(\d+)$/)
+  if (detail) {
+    return { public: true, node: <DetailPage id={detail[1]} /> }
+  }
+  if (path === '/notifications') {
+    return { public: false, node: <NoticePage /> }
+  }
+  return { public: false, node: <ListPage /> }
+}
+
+export default function App() {
+  return (
+    <Router>
+      <Shell />
+    </Router>
+  )
+}
