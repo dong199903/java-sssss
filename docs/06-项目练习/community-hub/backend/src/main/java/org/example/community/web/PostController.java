@@ -9,12 +9,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.example.community.dto.PostDto;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import java.util.Map;
 import java.util.Date;
 import org.example.community.dto.PostListDto;
+import org.springframework.web.bind.annotation.PutMapping;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -69,6 +73,16 @@ public class PostController {
     return ApiResponse.ok(postListDto);
   }
 
+  /**帖子详情 */
+  @GetMapping("/{id}")
+  public ApiResponse<PostDto> getPost(@PathVariable Long id) {
+    PostDto post = postService.getPost(id);
+    if (post == null) {
+      return ApiResponse.error(null, "帖子不存在");
+    }
+    return ApiResponse.ok(post);
+  }
+
   /* 发帖接口 */
   @PostMapping("/post")
   public ApiResponse<String> postArticle(HttpServletRequest request, @RequestBody PostDto postDto) {
@@ -89,5 +103,46 @@ public class PostController {
     } else {
       return ApiResponse.error("发帖失败");
     }
+  }
+
+  /**更新帖子 */
+  @PutMapping("/{id}")
+  public ApiResponse<String> updatePost(@PathVariable Long id, @RequestBody PostDto postDto,
+          HttpServletRequest request, HttpServletResponse response) {
+    Long userId = (Long) request.getAttribute("userId");
+    if (userId == null) {
+      return ApiResponse.error("未登录");
+    }
+    int result = postService.updatePost(userId, id, postDto);
+    if (result == 1) {
+      return ApiResponse.ok("success");
+    }
+    if (result == 2) {
+      response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+      return new ApiResponse<>(403, "无权修改", null);
+    }
+    if (result == 3) {
+      return ApiResponse.error("标题和正文不能为空");
+    }
+    return ApiResponse.error("帖子不存在");
+  }
+
+  /**删除帖子 */
+  @DeleteMapping("/{id}")
+  public ApiResponse<String> deletePost(@PathVariable Long id, HttpServletRequest request,
+          HttpServletResponse response) {
+    Long userId = (Long) request.getAttribute("userId");
+    if (userId == null) {
+      return ApiResponse.error("未登录");
+    }
+    int result = postService.deletePost(userId, id);
+    if (result == 1) {
+      return ApiResponse.ok("success");
+    }
+    if (result == 2) {
+      response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+      return new ApiResponse<>(403, "无权删除", null);
+    }
+    return ApiResponse.error("帖子不存在");
   }
 }

@@ -1,0 +1,19 @@
+package org.example.community.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
+
+@Data
+@TableName("admin_op_log")
+public class AdminOpLog {
+
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long id;
+    private Long operatorId;
+    private String action;
+    private String targetType;
+    private Long targetId;
+    private String detail;
+}

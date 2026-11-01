@@ -4,23 +4,41 @@ import java.util.List;
 import java.util.ArrayList;
 import org.example.community.common.GeoHash;
 import org.example.community.dto.PostDto;
+import org.example.community.dto.UserDto;
+import org.example.community.entity.AdminOpLog;
+import org.example.community.mapper.AdminOpLogMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.example.community.mapper.PostMapper;
 import org.example.community.entity.Post;
 import java.util.Date;
-import java.util.Map;
 
 @Service
 public class PostService {
+  private static final int ADMIN_ROLE = 1;
+
   private final PostMapper postMapper;
-  public PostService(PostMapper postMapper) {
+  private final UserService userService;
+  private final AdminOpLogMapper adminOpLogMapper;
+
+  public PostService(PostMapper postMapper, UserService userService, AdminOpLogMapper adminOpLogMapper) {
     this.postMapper = postMapper;
+    this.userService = userService;
+    this.adminOpLogMapper = adminOpLogMapper;
   }
   public List<String> getAllPosts() {
     return new ArrayList<String>();
   }
   public List<PostDto> getPostList(int communityId, Date lastCreateTime, Long lastId) {
     return toPostDtos(postMapper.selectByCommunityId(communityId, 10, lastCreateTime, lastId));
+  }
+
+  public PostDto getPost(Long id) {
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      return null;
+    }
+    return toPostDto(post);
   }
 
   public List<PostDto> getNearbyPosts(double latitude, double longitude, Date lastCreateTime, Long lastId) {
@@ -32,17 +50,23 @@ public class PostService {
   private List<PostDto> toPostDtos(List<Post> posts) {
     List<PostDto> postDtos = new ArrayList<PostDto>();
     for (Post post : posts) {
-      PostDto postDto = new PostDto();
-      postDto.setId(post.getId());
-      postDto.setTitle(post.getTitle());
-      postDto.setContent(post.getContent());
-      postDto.setCreateTime(post.getCreateTime());
-      postDto.setUpdateTime(post.getUpdateTime());
-      postDto.setLatitude(post.getLatitude());
-      postDto.setLongitude(post.getLongitude());
-      postDtos.add(postDto);
+      postDtos.add(toPostDto(post));
     }
     return postDtos;
+  }
+
+  private PostDto toPostDto(Post post) {
+    PostDto postDto = new PostDto();
+    postDto.setId(post.getId());
+    postDto.setCommunityId(post.getCommunityId());
+    postDto.setUserId(post.getAuthorId());
+    postDto.setTitle(post.getTitle());
+    postDto.setContent(post.getContent());
+    postDto.setCreateTime(post.getCreateTime());
+    postDto.setUpdateTime(post.getUpdateTime());
+    postDto.setLatitude(post.getLatitude());
+    postDto.setLongitude(post.getLongitude());
+    return postDto;
   }
   public int postArticle(Long userId, PostDto postDto) {
     if (postDto.getLatitude() == null || postDto.getLongitude() == null) {
@@ -64,5 +88,57 @@ public class PostService {
     } else {
       return 0;
     }
+  }
+
+  @Transactional
+  public int updatePost(Long userId, Long id, PostDto postDto) {
+    if (postDto.getTitle() == null || postDto.getTitle().isEmpty()
+            || postDto.getContent() == null || postDto.getContent().isEmpty()) {
+      return 3;
+    }
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      return 0;
+    }
+    if (!userId.equals(post.getAuthorId())) {
+      return 2;
+    }
+    return postMapper.updatePost(id, userId, postDto.getTitle(), postDto.getContent()) > 0 ? 1 : 0;
+  }
+
+  @Transactional
+  public int deletePost(Long userId, Long id) {
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      return 0;
+    }
+    boolean author = userId.equals(post.getAuthorId());
+    boolean admin = isAdmin(userId);
+    if (!author && !admin) {
+      return 2;
+    }
+    if (postMapper.deletePost(id) <= 0) {
+      return 0;
+    }
+    if (admin) {
+      AdminOpLog log = new AdminOpLog();
+      log.setOperatorId(userId);
+      log.setAction("DELETE_POST");
+      log.setTargetType("post");
+      log.setTargetId(id);
+      log.setDetail(deleteDetail(post.getTitle()));
+      adminOpLogMapper.insert(log);
+    }
+    return 1;
+  }
+
+  private boolean isAdmin(Long userId) {
+    UserDto user = userService.getUserById(userId);
+    return user != null && Integer.valueOf(ADMIN_ROLE).equals(user.getRole());
+  }
+
+  private String deleteDetail(String title) {
+    String detail = "删除帖子：" + title;
+    return detail.length() <= 500 ? detail : detail.substring(0, 500);
   }
 }

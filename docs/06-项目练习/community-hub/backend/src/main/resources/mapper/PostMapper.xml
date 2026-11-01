@@ -29,4 +29,18 @@
         ORDER BY created_at DESC, id DESC
         LIMIT #{pageSize}
     </select>
+    <select id="selectPostById" resultType="org.example.community.entity.Post">
+        SELECT id, community_id, author_id, title, content, latitude, longitude, geohash,
+               created_at AS create_time, updated_at AS update_time
+        FROM post
+        WHERE id = #{id}
+    </select>
+    <update id="updatePost">
+        UPDATE post
+        SET title = #{title}, content = #{content}
+        WHERE id = #{id} AND author_id = #{authorId}
+    </update>
+    <delete id="deletePost">
+        DELETE FROM post WHERE id = #{id}
+    </delete>
 </mapper>
