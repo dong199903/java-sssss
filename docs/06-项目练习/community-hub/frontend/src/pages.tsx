@@ -283,7 +283,7 @@ export function DetailPage({ id }: { id: string }) {
     return <p className="error">{message || '正在加载…'}</p>
   }
 
-  const mine = userId() !== null && userId() === post.userId
+  const mine = userId() !== null && userId() === String(post.userId)
 
   return (
     <article className="card">
@@ -357,7 +357,7 @@ export function EditorPage({ id }: { id?: string }) {
       setTitle(result.data.title)
       setContent(result.data.content)
       if (result.data.communityId) {
-        setCommunityId(result.data.communityId)
+        setCommunityId(Number(result.data.communityId))
       }
     })
   }, [id, go])

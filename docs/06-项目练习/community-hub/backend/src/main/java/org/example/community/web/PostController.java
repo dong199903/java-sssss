@@ -41,7 +41,9 @@ public class PostController {
 
     List<PostDto> postList = postService.getPostList(Integer.parseInt(params.get("communityId")), lastCreateTime, cursorId);
     if (postList.isEmpty()) {
-      return ApiResponse.error(null, "没有更多帖子");
+      PostListDto empty = new PostListDto();
+      empty.setPostList(List.of());
+      return ApiResponse.ok(empty);
     }
     Long lastId = postList.get(postList.size() - 1).getId();
     Date lastCreateTimes = postList.get(postList.size() - 1).getCreateTime();

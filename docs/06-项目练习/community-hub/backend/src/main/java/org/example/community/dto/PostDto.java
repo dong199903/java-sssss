@@ -17,6 +17,11 @@ public class PostDto {
   private BigDecimal latitude;
   private BigDecimal longitude;
   private Long userId;
+  private String nickname;
+  private Long viewCount;
+  private Integer likeCount;
+  private Integer commentCount;
+  private Integer favoriteCount;
   private Date createTime;
   private Date updateTime;
 }

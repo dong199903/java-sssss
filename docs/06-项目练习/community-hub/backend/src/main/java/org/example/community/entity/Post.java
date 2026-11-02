@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -22,6 +23,12 @@ public class Post {
   private BigDecimal latitude;
   private BigDecimal longitude;
   private String geohash;
+  private Long viewCount;
+  private Integer likeCount;
+  private Integer commentCount;
+  private Integer favoriteCount;
+  @TableField(exist = false)
+  private String nickname;
   private Long userId;
   private Date createTime;
   private Date updateTime;

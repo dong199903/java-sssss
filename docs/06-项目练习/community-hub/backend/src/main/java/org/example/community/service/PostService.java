@@ -15,6 +15,12 @@ import org.example.community.entity.Post;
 import java.util.Date;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import org.springframework.dao.DuplicateKeyException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 public class PostService {
@@ -23,25 +29,65 @@ public class PostService {
   private final PostMapper postMapper;
   private final UserService userService;
   private final AdminOpLogMapper adminOpLogMapper;
+  private final StringRedisTemplate stringRedisTemplate;
+  private final ObjectMapper objectMapper;
 
-  public PostService(PostMapper postMapper, UserService userService, AdminOpLogMapper adminOpLogMapper) {
+  public PostService(PostMapper postMapper, UserService userService, AdminOpLogMapper adminOpLogMapper,
+      StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper) {
     this.postMapper = postMapper;
     this.userService = userService;
     this.adminOpLogMapper = adminOpLogMapper;
+    this.stringRedisTemplate = stringRedisTemplate;
+    this.objectMapper = objectMapper;
   }
+
   public List<String> getAllPosts() {
     return new ArrayList<String>();
   }
+
   public List<PostDto> getPostList(int communityId, Date lastCreateTime, Long lastId) {
     return toPostDtos(postMapper.selectByCommunityId(communityId, 10, lastCreateTime, lastId));
   }
 
   public PostDto getPost(Long id) {
-    Post post = postMapper.selectPostById(id);
-    if (post == null) {
+    String cacheKey = "post:" + id;
+    String cacheValue = stringRedisTemplate.opsForValue().get(cacheKey);
+    int result = 0;
+    // 1. 缓存命中，走缓存
+    if (cacheValue != null) {
+      try {
+        return objectMapper.readValue(cacheValue, PostDto.class);
+      } catch (JsonProcessingException ex) {
+        // 缓存内容损坏时继续查库
+        result = -1;
+      }
+    }
+    // 2. 读取空值缓存，命中直接返回空
+    String nullCacheValue = stringRedisTemplate.opsForValue().get("post:null:" + id);
+    if (nullCacheValue != null) {
       return null;
     }
-    return toPostDto(post);
+    // 3. 空值缓存+缓存未命中或者缓存内容损坏，继续查库
+    if (result == -1 || cacheValue == null) {
+      // 3.1 查库
+      Post post = postMapper.selectPostById(id);
+      // 3.2 库如果也是空，添加空值缓存
+      if (post == null) {
+        stringRedisTemplate.opsForValue().set("post:null:" + id, "null", 60, TimeUnit.SECONDS);
+        return null;
+      }
+      // 3.3 库有数据，更新缓存
+      try {
+        long ttlSeconds = TimeUnit.MINUTES.toSeconds(30) + ThreadLocalRandom.current().nextInt(301);
+        stringRedisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(toPostDto(post)), ttlSeconds,
+            TimeUnit.SECONDS);
+      } catch (JsonProcessingException ex) {
+        System.err.println("缓存更新失败: " + ex.getMessage());
+      }
+      // 3.4 返回数据
+      return toPostDto(post);
+    }
+    return null;
   }
 
   public List<PostDto> getNearbyPosts(double latitude, double longitude, Date lastCreateTime, Long lastId) {
@@ -69,8 +115,14 @@ public class PostService {
     postDto.setUpdateTime(post.getUpdateTime());
     postDto.setLatitude(post.getLatitude());
     postDto.setLongitude(post.getLongitude());
+    postDto.setNickname(post.getNickname());
+    postDto.setViewCount(post.getViewCount());
+    postDto.setLikeCount(post.getLikeCount());
+    postDto.setCommentCount(post.getCommentCount());
+    postDto.setFavoriteCount(post.getFavoriteCount());
     return postDto;
   }
+
   public int postArticle(Long userId, PostDto postDto) {
     if (postDto.getLatitude() == null || postDto.getLongitude() == null) {
       return 0;
@@ -80,6 +132,7 @@ public class PostService {
     p.setAuthorId(userId);
     p.setTitle(postDto.getTitle());
     p.setContent(postDto.getContent());
+    p.setId(IdWorker.getId());
     p.setLatitude(postDto.getLatitude());
     p.setLongitude(postDto.getLongitude());
     p.setGeohash(GeoHash.encode(postDto.getLatitude().doubleValue(), postDto.getLongitude().doubleValue(), 6));
@@ -96,7 +149,7 @@ public class PostService {
   @Transactional
   public int updatePost(Long userId, Long id, PostDto postDto) {
     if (postDto.getTitle() == null || postDto.getTitle().isEmpty()
-            || postDto.getContent() == null || postDto.getContent().isEmpty()) {
+        || postDto.getContent() == null || postDto.getContent().isEmpty()) {
       return 3;
     }
     Post post = postMapper.selectPostById(id);

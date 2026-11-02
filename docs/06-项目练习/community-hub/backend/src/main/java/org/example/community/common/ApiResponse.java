@@ -22,6 +22,10 @@ public class ApiResponse<T> {
     return of(Status.SUCCESS, data, message);
   }
 
+  public static ApiResponse<String> error(String message) {
+    return of(Status.ERROR, null, message);
+  }
+
   public static <T> ApiResponse<T> error(T data) {
     return of(Status.ERROR, data, "失败");
   }

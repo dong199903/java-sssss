@@ -46,7 +46,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<R
   if (current) {
     headers.set('Authorization', `Bearer ${current}`)
   }
-  const response = await fetch(`${import.meta.env.VITE_API_BASE}${path}`, { ...options, headers })
+  const base = import.meta.env.VITE_API_BASE || '/api'
+  const response = await fetch(`${base}${path}`, { ...options, headers })
   const body = (await response.json().catch(() => ({}))) as Body<T>
   const code = body.code ?? response.status
   return {

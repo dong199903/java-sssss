@@ -2,38 +2,45 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.example.community.mapper.PostMapper">
+    <sql id="postColumns">
+        p.id, p.community_id, p.author_id, p.title, p.content, p.latitude, p.longitude, p.geohash,
+        p.view_count, p.like_count, p.comment_count, p.favorite_count,
+        p.created_at AS create_time, p.updated_at AS update_time, u.nickname
+    </sql>
     <insert id="insert" parameterType="org.example.community.entity.Post">
         INSERT INTO post (id, community_id, author_id, title, content, latitude, longitude, geohash)
         VALUES (#{id}, #{communityId}, #{authorId}, #{title}, #{content}, #{latitude}, #{longitude}, #{geohash})
     </insert>
     <select id="selectByCommunityId" resultType="org.example.community.entity.Post">
-        SELECT * FROM post
-        WHERE community_id = #{communityId}
+        SELECT <include refid="postColumns"/>
+        FROM post p
+        LEFT JOIN `user` u ON u.id = p.author_id
+        WHERE p.community_id = #{communityId}
         <if test="lastCreateTime != null and lastId != null">
-            AND (created_at &lt; #{lastCreateTime}
-                 OR (created_at = #{lastCreateTime} AND id &lt; #{lastId}))
+            AND (p.created_at &lt; #{lastCreateTime}
+                 OR (p.created_at = #{lastCreateTime} AND p.id &lt; #{lastId}))
         </if>
-        ORDER BY created_at DESC, id DESC
+        ORDER BY p.created_at DESC, p.id DESC
         LIMIT #{pageSize}
     </select>
     <select id="selectNearby" resultType="org.example.community.entity.Post">
-        SELECT id, community_id, author_id, title, content, latitude, longitude, geohash,
-               created_at AS create_time, updated_at AS update_time
-        FROM post
-        WHERE geohash &gt;= #{geohashStart}
-          AND geohash &lt; #{geohashEnd}
+        SELECT <include refid="postColumns"/>
+        FROM post p
+        LEFT JOIN `user` u ON u.id = p.author_id
+        WHERE p.geohash &gt;= #{geohashStart}
+          AND p.geohash &lt; #{geohashEnd}
         <if test="lastCreateTime != null and lastId != null">
-            AND (created_at &lt; #{lastCreateTime}
-                 OR (created_at = #{lastCreateTime} AND id &lt; #{lastId}))
+            AND (p.created_at &lt; #{lastCreateTime}
+                 OR (p.created_at = #{lastCreateTime} AND p.id &lt; #{lastId}))
         </if>
-        ORDER BY created_at DESC, id DESC
+        ORDER BY p.created_at DESC, p.id DESC
         LIMIT #{pageSize}
     </select>
     <select id="selectPostById" resultType="org.example.community.entity.Post">
-        SELECT id, community_id, author_id, title, content, latitude, longitude, geohash,
-               created_at AS create_time, updated_at AS update_time
-        FROM post
-        WHERE id = #{id}
+        SELECT <include refid="postColumns"/>
+        FROM post p
+        LEFT JOIN `user` u ON u.id = p.author_id
+        WHERE p.id = #{id}
     </select>
     <update id="updatePost">
         UPDATE post

@@ -20,8 +20,7 @@ export function userId() {
   }
   try {
     const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { sub?: string }
-    const id = Number(json.sub)
-    return Number.isNaN(id) ? null : id
+    return json.sub ? String(json.sub) : null
   } catch {
     return null
   }
