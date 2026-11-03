@@ -37,6 +37,8 @@ public interface PostMapper extends BaseMapper<Post> {
 
   int increaseCommentCount(Long id);
 
+  int increaseViewCount(@Param("id") Long id, @Param("delta") long delta);
+
   List<CommentDto> selectComments(@Param("postId") Long postId, @Param("pageSize") int pageSize,
           @Param("lastCreateTime") Date lastCreateTime, @Param("lastId") Long lastId);
 }

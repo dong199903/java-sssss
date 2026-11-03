@@ -95,6 +95,11 @@
         SET comment_count = comment_count + 1
         WHERE id = #{id}
     </update>
+    <update id="increaseViewCount">
+        UPDATE post
+        SET view_count = view_count + #{delta}
+        WHERE id = #{id}
+    </update>
     <select id="selectComments" resultType="org.example.community.dto.CommentDto">
         SELECT c.id, c.content, c.author_id AS user_id, u.nickname, c.created_at AS create_time
         FROM comment c

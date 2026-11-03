@@ -18,11 +18,14 @@ import org.springframework.dao.DuplicateKeyException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
-
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import java.util.Optional;
 @Service
+@EnableScheduling
 public class PostService {
   private static final int ADMIN_ROLE = 1;
 
@@ -48,46 +51,149 @@ public class PostService {
   public List<PostDto> getPostList(int communityId, Date lastCreateTime, Long lastId) {
     return toPostDtos(postMapper.selectByCommunityId(communityId, 10, lastCreateTime, lastId));
   }
-
-  public PostDto getPost(Long id) {
-    String cacheKey = "post:" + id;
-    String cacheValue = stringRedisTemplate.opsForValue().get(cacheKey);
-    int result = 0;
-    // 1. 缓存命中，走缓存
-    if (cacheValue != null) {
+  @Scheduled(fixedDelay = 5 * 60 * 1000)
+  public void cleanViewCache() {
+    //1. 每5分钟执行一次缓存任务,只清理集合前200个帖子
+    for (int i = 0; i < 200; i++) {
+      String postId = stringRedisTemplate.opsForSet().pop("post:view:dirty");
+      if (postId == null) {
+        return;
+      }
+      //2. lua执行清理缓存，删除缓存中对应的帖子浏览量，返回增加的浏览量
+      Long delta = takeViewCount(postId);
+      if (delta == null || delta <= 0) {
+        continue;
+      }
       try {
-        return objectMapper.readValue(cacheValue, PostDto.class);
-      } catch (JsonProcessingException ex) {
-        // 缓存内容损坏时继续查库
-        result = -1;
+        if (postMapper.increaseViewCount(Long.valueOf(postId), delta) <= 0) {
+          continue;
+        }
+      } catch (RuntimeException ex) {
+        //3. 增加到mysql失败，恢复redis的集合和浏览量缓存
+        stringRedisTemplate.opsForValue().increment("post:view:" + postId, delta);
+        stringRedisTemplate.opsForSet().add("post:view:dirty", postId);
+        continue;
+      }
+      //4. 如果redis缓存中还有数据，则恢复集合
+      if (Boolean.TRUE.equals(stringRedisTemplate.hasKey("post:view:" + postId))) {
+        stringRedisTemplate.opsForSet().add("post:view:dirty", postId);
       }
     }
-    // 2. 读取空值缓存，命中直接返回空
-    String nullCacheValue = stringRedisTemplate.opsForValue().get("post:null:" + id);
-    if (nullCacheValue != null) {
+  }
+
+  private Long takeViewCount(String postId) {
+    DefaultRedisScript<String> script = new DefaultRedisScript<>();
+    script.setScriptText("local v = redis.call('GET', KEYS[1]) if not v then return nil end redis.call('DEL', KEYS[1]) return v");
+    script.setResultType(String.class);
+    String value = stringRedisTemplate.execute(script, List.of("post:view:" + postId));
+    if (value == null || value.isEmpty()) {
       return null;
     }
-    // 3. 空值缓存+缓存未命中或者缓存内容损坏，继续查库
-    if (result == -1 || cacheValue == null) {
-      // 3.1 查库
-      Post post = postMapper.selectPostById(id);
-      // 3.2 库如果也是空，添加空值缓存
-      if (post == null) {
-        stringRedisTemplate.opsForValue().set("post:null:" + id, "null", 60, TimeUnit.SECONDS);
+    return Long.valueOf(value);
+  }
+
+  public PostDto getPost(Long id) {
+    PostDto cached = readDetailCache(id);
+    //增加浏览量
+    stringRedisTemplate.opsForValue().increment("post:view:" + id);
+    //标记当前有哪些帖子浏览量在缓存中
+    stringRedisTemplate.opsForSet().add("post:view:dirty", String.valueOf(id));
+    //1. 读取缓存，如果缓存中有数据，直接返回
+    if (cached != null) {
+      return cached;
+    }
+    //2. 如果缓存中没有数据，检查是否被标记为空，如果被标记为空，返回空
+    if (nullMarked(id)) {
+      return null;
+    }
+    //3. 如果缓存中没有数据，也没有被标记为空，则尝试获取redis锁
+    String lockKey = "lock:post:" + id;
+    String token = String.valueOf(IdWorker.getId());
+    Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, token, 10, TimeUnit.SECONDS);
+    if (Boolean.TRUE.equals(locked)) {
+      //4. 如果获取到redis锁，先读取redis缓存
+      //5. 如果redis缓存中有数据，直接返回
+      try {
+        cached = readDetailCache(id);
+        if (cached != null) {
+          return cached;
+        }
+        //6. 如果redis缓存中没有数据，检查是否被标记为空，如果被标记为空，返回空
+        if (nullMarked(id)) {
+          return null;
+        }
+        //7. 如果redis缓存中没有数据，也没有被标记为空，则尝试加载数据库数据
+        return loadPost(id, true);
+      } finally {
+        //8. 释放redis锁
+        unlock(lockKey, token);
+      }
+    }
+    //9. 如果获取不到redis锁，重试3次
+    for (int i = 0; i < 3; i++) {
+      try {
+        Thread.sleep(50);
+      } catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        break;
+      }
+      //11. 读取redis缓存
+      cached = readDetailCache(id);
+      //12. 如果redis缓存中有数据，直接返回
+      if (cached != null) {
+        return cached;
+      }
+      //13. 如果redis缓存中没有数据，检查是否被标记为空，如果被标记为空，返回空
+      if (nullMarked(id)) {
         return null;
       }
-      // 3.3 库有数据，更新缓存
+    }
+    //10. 如果重试3次后还是没抢到redis锁，则尝试加载数据库数据
+    return loadPost(id, false);
+  }
+
+  private PostDto readDetailCache(Long id) {
+    String cacheValue = stringRedisTemplate.opsForValue().get("post:" + id);
+    if (cacheValue == null) {
+      return null;
+    }
+    try {
+      return objectMapper.readValue(cacheValue, PostDto.class);
+    } catch (JsonProcessingException ex) {
+      return null;
+    }
+  }
+
+  private boolean nullMarked(Long id) {
+    return stringRedisTemplate.opsForValue().get("post:null:" + id) != null;
+  }
+
+  private PostDto loadPost(Long id, boolean writeCache) {
+    Post post = postMapper.selectPostById(id);
+    if (post == null) {
+      if (writeCache) {
+        stringRedisTemplate.opsForValue().set("post:null:" + id, "null", 60, TimeUnit.SECONDS);
+      }
+      return null;
+    }
+    PostDto postDto = toPostDto(post);
+    if (writeCache) {
       try {
         long ttlSeconds = TimeUnit.MINUTES.toSeconds(30) + ThreadLocalRandom.current().nextInt(301);
-        stringRedisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(toPostDto(post)), ttlSeconds,
+        stringRedisTemplate.opsForValue().set("post:" + id, objectMapper.writeValueAsString(postDto), ttlSeconds,
             TimeUnit.SECONDS);
       } catch (JsonProcessingException ex) {
         System.err.println("缓存更新失败: " + ex.getMessage());
       }
-      // 3.4 返回数据
-      return toPostDto(post);
     }
-    return null;
+    return postDto;
+  }
+
+  private void unlock(String lockKey, String token) {
+    DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+    script.setScriptText("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end");
+    script.setResultType(Long.class);
+    stringRedisTemplate.execute(script, List.of(lockKey), token);
   }
 
   public List<PostDto> getNearbyPosts(double latitude, double longitude, Date lastCreateTime, Long lastId) {
