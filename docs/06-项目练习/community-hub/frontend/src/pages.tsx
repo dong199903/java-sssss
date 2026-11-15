@@ -428,14 +428,14 @@ export function HotPage() {
   const [message, setMessage] = useState('正在加载热榜…')
 
   useEffect(() => {
-    void api<HotItem[]>('/ranks/hot').then((result) => {
+    void api<HotItem[]>('/rank/hot/list').then((result) => {
       if (!result.ok || !result.data) {
         setMessage(result.message)
         setItems([])
         return
       }
-      setMessage('')
       setItems(result.data)
+      setMessage(result.data.length === 0 ? '暂无热榜' : '')
     })
   }, [])
 

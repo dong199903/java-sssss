@@ -112,4 +112,13 @@
         ORDER BY c.created_at DESC, c.id DESC
         LIMIT #{pageSize}
     </select>
+    <select id="selectByIds" resultType="org.example.community.entity.Post">
+        SELECT <include refid="postColumns"/>
+        FROM post p
+        LEFT JOIN `user` u ON u.id = p.author_id
+        WHERE p.id IN
+        <foreach collection="postIds" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+    </select>
 </mapper>

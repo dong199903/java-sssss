@@ -47,6 +47,7 @@ public class LoginFilter extends OncePerRequestFilter {
         return "/api/posts".equals(path)
                 || "/api/posts/nearby".equals(path)
                 || "/api/ranks/hot".equals(path)
+                || "/rank/hot/list".equals(path)
                 || path.matches("/api/posts/\\d+");
     }
 

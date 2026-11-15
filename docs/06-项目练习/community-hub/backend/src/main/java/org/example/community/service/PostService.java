@@ -10,6 +10,7 @@ import org.example.community.entity.AdminOpLog;
 import org.example.community.mapper.AdminOpLogMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.example.community.mapper.PostMapper;
 import org.example.community.entity.Post;
 import java.util.Date;
@@ -23,7 +24,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
-import java.util.Optional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import java.util.Set;
 @Service
 @EnableScheduling
 public class PostService {
@@ -251,7 +253,19 @@ public class PostService {
       return 0;
     }
   }
-
+  public void deletePostCache(Long id){
+    // 在事务结束后执行删除
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        try {
+          stringRedisTemplate.delete("post:" + id);
+        } catch (Exception ex) {
+          System.err.println("删除帖子缓存失败: " + ex.getMessage());
+        }
+      }
+    });
+  }
   @Transactional
   public int updatePost(Long userId, Long id, PostDto postDto) {
     if (postDto.getTitle() == null || postDto.getTitle().isEmpty()
@@ -265,7 +279,11 @@ public class PostService {
     if (!userId.equals(post.getAuthorId())) {
       return 2;
     }
-    return postMapper.updatePost(id, userId, postDto.getTitle(), postDto.getContent()) > 0 ? 1 : 0;
+    int updateResult = postMapper.updatePost(id, userId, postDto.getTitle(), postDto.getContent()) > 0 ? 1 : 0;
+    if (updateResult > 0) {
+      deletePostCache(id);
+    }
+    return updateResult;
   }
 
   @Transactional
@@ -291,6 +309,7 @@ public class PostService {
       log.setDetail(deleteDetail(post.getTitle()));
       adminOpLogMapper.insert(log);
     }
+    deletePostCache(id);
     return 1;
   }
 
@@ -315,7 +334,12 @@ public class PostService {
     } catch (DuplicateKeyException ex) {
       return -1;
     }
-    return postMapper.updateLikeCount(id, 1) > 0 ? 1 : 0;
+    int updateResult = postMapper.updateLikeCount(id, 1) > 0 ? 1 : 0;
+    if (updateResult > 0) {
+      deletePostCache(id);
+      updateHotScore(id, 2);
+    }
+    return updateResult;
   }
 
   @Transactional
@@ -330,9 +354,23 @@ public class PostService {
     if (postMapper.decreaseLikeCount(id) <= 0) {
       throw new IllegalStateException("点赞计数更新失败");
     }
+    deletePostCache(id);
+    updateHotScore(id, -2);
     return 1;
   }
-
+  public void updateHotScore(Long id, double score) {
+    /**事务结束后执行更新热榜分数  */
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        try {
+          stringRedisTemplate.opsForZSet().incrementScore("post:hot", String.valueOf(id), score);
+        } catch (Exception ex) {
+          System.err.println("更新热榜分数失败: " + ex.getMessage());
+        }
+      }
+    });
+  }
   @Transactional
   public int favoritePost(Long userId, Long id) {
     Post post = postMapper.selectPostById(id);
@@ -344,7 +382,12 @@ public class PostService {
     } catch (DuplicateKeyException ex) {
       return -1;
     }
-    return postMapper.updateFavoriteCount(id, 1) > 0 ? 1 : 0;
+    int updateResult = postMapper.updateFavoriteCount(id, 1) > 0 ? 1 : 0;
+    if (updateResult > 0) {
+      deletePostCache(id);
+      updateHotScore(id, 4);
+    }
+    return updateResult;
   }
 
   @Transactional
@@ -359,6 +402,8 @@ public class PostService {
     if (postMapper.decreaseFavoriteCount(id) <= 0) {
       throw new IllegalStateException("收藏计数更新失败");
     }
+    deletePostCache(id);
+    updateHotScore(id, -4);
     return 1;
   }
 
@@ -378,6 +423,8 @@ public class PostService {
     if (postMapper.increaseCommentCount(id) <= 0) {
       throw new IllegalStateException("评论计数更新失败");
     }
+    deletePostCache(id);
+    updateHotScore(id, 3);
     return 1;
   }
 
@@ -386,5 +433,11 @@ public class PostService {
       return null;
     }
     return postMapper.selectComments(id, 20, lastCreateTime, lastId);
+  }
+
+  public List<PostDto> getPostsByIds(List<String> postIds) {
+    List<String> ids = new ArrayList<String>(postIds);
+    List<Post> posts = postMapper.selectByIds(ids);
+    return toPostDtos(posts);
   }
 }

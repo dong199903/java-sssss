@@ -24,4 +24,5 @@ public class PostDto {
   private Integer favoriteCount;
   private Date createTime;
   private Date updateTime;
+  private Double score;
 }

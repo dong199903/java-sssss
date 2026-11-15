@@ -41,4 +41,6 @@ public interface PostMapper extends BaseMapper<Post> {
 
   List<CommentDto> selectComments(@Param("postId") Long postId, @Param("pageSize") int pageSize,
           @Param("lastCreateTime") Date lastCreateTime, @Param("lastId") Long lastId);
+
+  List<Post> selectByIds(@Param("postIds") List<String> postIds);  
 }
