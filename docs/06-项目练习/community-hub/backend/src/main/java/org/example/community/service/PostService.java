@@ -18,6 +18,10 @@ import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import org.springframework.dao.DuplicateKeyException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import java.util.concurrent.ThreadLocalRandom;
@@ -36,15 +40,18 @@ public class PostService {
   private final UserService userService;
   private final AdminOpLogMapper adminOpLogMapper;
   private final StringRedisTemplate stringRedisTemplate;
+  private final RedissonClient redissonClient;
   private final ObjectMapper objectMapper;
   private final RabbitTemplate rabbitTemplate;
 
   public PostService(PostMapper postMapper, UserService userService, AdminOpLogMapper adminOpLogMapper,
-      StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper, RabbitTemplate rabbitTemplate) {
+      StringRedisTemplate stringRedisTemplate, RedissonClient redissonClient, ObjectMapper objectMapper,
+      RabbitTemplate rabbitTemplate) {
     this.postMapper = postMapper;
     this.userService = userService;
     this.adminOpLogMapper = adminOpLogMapper;
     this.stringRedisTemplate = stringRedisTemplate;
+    this.redissonClient = redissonClient;
     this.objectMapper = objectMapper;
     this.rabbitTemplate = rabbitTemplate;
   }
@@ -112,10 +119,14 @@ public class PostService {
       return null;
     }
     //3. 如果缓存中没有数据，也没有被标记为空，则尝试获取redis锁
-    String lockKey = "lock:post:" + id;
-    String token = String.valueOf(IdWorker.getId());
-    Boolean locked = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, token, 10, TimeUnit.SECONDS);
-    if (Boolean.TRUE.equals(locked)) {
+    RLock lock = redissonClient.getLock("lock:post:" + id);
+    boolean locked = false;
+    try {
+      locked = lock.tryLock(0, 10, TimeUnit.SECONDS);
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+    }
+    if (locked) {
       //4. 如果获取到redis锁，先读取redis缓存
       //5. 如果redis缓存中有数据，直接返回
       try {
@@ -130,8 +141,9 @@ public class PostService {
         //7. 如果redis缓存中没有数据，也没有被标记为空，则尝试加载数据库数据
         return loadPost(id, true);
       } finally {
-        //8. 释放redis锁
-        unlock(lockKey, token);
+        if (lock.isHeldByCurrentThread()) {
+          lock.unlock();
+        }
       }
     }
     //9. 如果获取不到redis锁，重试3次
@@ -174,10 +186,11 @@ public class PostService {
   }
 
   private PostDto loadPost(Long id, boolean writeCache) {
+    stringRedisTemplate.opsForValue().increment("stat:detail:db");
     Post post = postMapper.selectPostById(id);
     if (post == null) {
       if (writeCache) {
-        stringRedisTemplate.opsForValue().set("post:null:" + id, "null", 60, TimeUnit.SECONDS);
+        stringRedisTemplate.opsForValue().set("post:null:" + id, "1", 60, TimeUnit.SECONDS);
       }
       return null;
     }
@@ -194,11 +207,16 @@ public class PostService {
     return postDto;
   }
 
-  private void unlock(String lockKey, String token) {
-    DefaultRedisScript<Long> script = new DefaultRedisScript<>();
-    script.setScriptText("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end");
-    script.setResultType(Long.class);
-    stringRedisTemplate.execute(script, List.of(lockKey), token);
+  public void deleteListCache(Long communityId) {
+    if (communityId == null) {
+      return;
+    }
+    ScanOptions options = ScanOptions.scanOptions().match("post:list:" + communityId + ":*").count(100).build();
+    try (Cursor<String> cursor = stringRedisTemplate.scan(options)) {
+      while (cursor.hasNext()) {
+        stringRedisTemplate.delete(cursor.next());
+      }
+    }
   }
 
   public List<PostDto> getNearbyPosts(double latitude, double longitude, Date lastCreateTime, Long lastId) {
@@ -285,6 +303,7 @@ public class PostService {
     int updateResult = postMapper.updatePost(id, userId, postDto.getTitle(), postDto.getContent()) > 0 ? 1 : 0;
     if (updateResult > 0) {
       deletePostCache(id);
+      deleteListCache(post.getCommunityId());
     }
     return updateResult;
   }
@@ -313,6 +332,7 @@ public class PostService {
       adminOpLogMapper.insert(log);
     }
     deletePostCache(id);
+    deleteListCache(post.getCommunityId());
     return 1;
   }
 
@@ -468,6 +488,7 @@ public class PostService {
       throw new IllegalStateException("评论计数更新失败");
     }
     deletePostCache(id);
+    deleteListCache(post.getCommunityId());
     updateHotScore(id, 3);
     if (!post.getAuthorId().equals(userId)) {
       sendCommentMessage(commentId, post.getAuthorId());

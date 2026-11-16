@@ -171,7 +171,8 @@ public class PostController {
 
   /**取消点赞 */
   @DeleteMapping("/{id}/likes")
-  public ApiResponse<String> unlikePost(@PathVariable Long id, HttpServletRequest request) {
+  public ApiResponse<String> unlikePost(@PathVariable Long id, HttpServletRequest request,
+          HttpServletResponse response) {
     Long userId = (Long) request.getAttribute("userId");
     if (userId == null) {
       return ApiResponse.error("未登录");
@@ -182,7 +183,8 @@ public class PostController {
         return ApiResponse.ok("success");
       }
       if (result == -1) {
-        return ApiResponse.error("未点赞");
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        return new ApiResponse<>(403, "无权取消", null);
       }
       if (result == 2) {
         return ApiResponse.error("帖子不存在");
