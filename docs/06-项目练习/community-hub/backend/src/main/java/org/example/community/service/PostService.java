@@ -25,7 +25,8 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import java.util.Set;
+import org.example.community.dto.NotifyDto;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 @Service
 @EnableScheduling
 public class PostService {
@@ -36,14 +37,16 @@ public class PostService {
   private final AdminOpLogMapper adminOpLogMapper;
   private final StringRedisTemplate stringRedisTemplate;
   private final ObjectMapper objectMapper;
+  private final RabbitTemplate rabbitTemplate;
 
   public PostService(PostMapper postMapper, UserService userService, AdminOpLogMapper adminOpLogMapper,
-      StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper) {
+      StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper, RabbitTemplate rabbitTemplate) {
     this.postMapper = postMapper;
     this.userService = userService;
     this.adminOpLogMapper = adminOpLogMapper;
     this.stringRedisTemplate = stringRedisTemplate;
     this.objectMapper = objectMapper;
+    this.rabbitTemplate = rabbitTemplate;
   }
 
   public List<String> getAllPosts() {
@@ -329,8 +332,9 @@ public class PostService {
     if (post == null) {
       return 2;
     }
+    long likeId = IdWorker.getId();
     try {
-      postMapper.likePost(IdWorker.getId(), id, userId);
+      postMapper.likePost(likeId, id, userId);
     } catch (DuplicateKeyException ex) {
       return -1;
     }
@@ -338,6 +342,9 @@ public class PostService {
     if (updateResult > 0) {
       deletePostCache(id);
       updateHotScore(id, 2);
+      if (!post.getAuthorId().equals(userId)) {
+        sendLikeMessage(likeId, post.getAuthorId());
+      }
     }
     return updateResult;
   }
@@ -371,14 +378,46 @@ public class PostService {
       }
     });
   }
+
+  public void sendLikeMessage(Long likeId, Long receiverId) {
+    sendNotifyMessage("LIKE", "notify.like", likeId, receiverId, "有人赞了你的帖子", "发送点赞消息失败");
+  }
+
+  /**
+   * 点赞成功后，消息队列发送点赞消息
+   * @param userId
+   * @param id
+   * @return
+   */
+  public void sendFavoriteMessage(Long favoriteId, Long userId, Long id) {
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        try {
+          // 发送点赞消息到消息队列
+          NotifyDto notifyDto = new NotifyDto();
+          notifyDto.setEventId(String.valueOf(IdWorker.getId()));
+          notifyDto.setEventType("FAVORITE");
+          notifyDto.setBizId(favoriteId);
+          notifyDto.setReceiverId(userId);
+          notifyDto.setContent("喜欢你的帖子");
+          rabbitTemplate.convertAndSend("community.topic", "notify.favorite", notifyDto);
+        } catch (Exception ex) {
+          System.err.println("发送收藏消息失败: " + ex.getMessage());
+        }
+      }
+    });
+  }
+
   @Transactional
   public int favoritePost(Long userId, Long id) {
     Post post = postMapper.selectPostById(id);
     if (post == null) {
       return 2;
     }
+    long favoriteId = IdWorker.getId();
     try {
-      postMapper.favoritePost(IdWorker.getId(), id, userId);
+      postMapper.favoritePost(favoriteId, id, userId);
     } catch (DuplicateKeyException ex) {
       return -1;
     }
@@ -386,6 +425,10 @@ public class PostService {
     if (updateResult > 0) {
       deletePostCache(id);
       updateHotScore(id, 4);
+      // 帖子作者不等于当前用户
+      if (!post.getAuthorId().equals(userId)) {
+        sendFavoriteMessage(favoriteId, post.getAuthorId(), id);
+      }
     }
     return updateResult;
   }
@@ -419,13 +462,41 @@ public class PostService {
     if (post == null) {
       return 2;
     }
-    postMapper.insertComment(IdWorker.getId(), id, userId, content.trim());
+    long commentId = IdWorker.getId();
+    postMapper.insertComment(commentId, id, userId, content.trim());
     if (postMapper.increaseCommentCount(id) <= 0) {
       throw new IllegalStateException("评论计数更新失败");
     }
     deletePostCache(id);
     updateHotScore(id, 3);
+    if (!post.getAuthorId().equals(userId)) {
+      sendCommentMessage(commentId, post.getAuthorId());
+    }
     return 1;
+  }
+
+  public void sendCommentMessage(Long commentId, Long receiverId) {
+    sendNotifyMessage("COMMENT", "notify.comment", commentId, receiverId, "有人评论了你的帖子", "发送评论消息失败");
+  }
+
+  private void sendNotifyMessage(String eventType, String routingKey, Long bizId, Long receiverId, String content,
+      String errorMessage) {
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        try {
+          NotifyDto notifyDto = new NotifyDto();
+          notifyDto.setEventId(String.valueOf(IdWorker.getId()));
+          notifyDto.setEventType(eventType);
+          notifyDto.setBizId(bizId);
+          notifyDto.setReceiverId(receiverId);
+          notifyDto.setContent(content);
+          rabbitTemplate.convertAndSend("community.topic", routingKey, notifyDto);
+        } catch (Exception ex) {
+          System.err.println(errorMessage + ": " + ex.getMessage());
+        }
+      }
+    });
   }
 
   public List<CommentDto> getComments(Long id, Date lastCreateTime, Long lastId) {

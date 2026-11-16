@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.community.mapper.NotificationMapper">
+    <insert id="insertIgnoreBatch">
+        INSERT IGNORE INTO notification
+        (id, receiver_id, event_type, biz_id, content, read_flag)
+        VALUES
+        <foreach collection="list" item="n" separator=",">
+            (#{n.id}, #{n.receiverId}, #{n.eventType}, #{n.bizId}, #{n.content}, #{n.readFlag})
+        </foreach>
+    </insert>
+
+    <select id="listUnread" resultType="org.example.community.entity.Notification">
+        SELECT id, receiver_id, event_type, biz_id, content, read_flag, created_at
+        FROM notification
+        WHERE receiver_id = #{userId} AND read_flag = 0
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="selectById" resultType="org.example.community.entity.Notification">
+        SELECT id, receiver_id, event_type, biz_id, content, read_flag, created_at
+        FROM notification
+        WHERE id = #{id}
+    </select>
+
+    <update id="markRead">
+        UPDATE notification
+        SET read_flag = 1
+        WHERE id = #{id} AND receiver_id = #{userId}
+    </update>
+</mapper>

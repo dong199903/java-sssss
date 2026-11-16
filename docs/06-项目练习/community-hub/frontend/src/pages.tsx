@@ -458,9 +458,85 @@ export function HotPage() {
 }
 
 type Notice = {
-  id: number
+  id: string | number
   content: string
   readFlag?: number
+  createdAt?: string
+}
+
+async function loadUnread(): Promise<{ ok: boolean; message: string; items: Notice[] }> {
+  const result = await api<Notice[]>('/notifications')
+  if (!result.ok || !result.data) {
+    return { ok: false, message: result.message, items: [] }
+  }
+  return { ok: true, message: '', items: result.data }
+}
+
+async function markNoticeRead(id: string | number) {
+  return api<string>(`/notifications/${id}/read`, { method: 'POST' })
+}
+
+export function NoticeBell() {
+  const [open, setOpen] = useState(false)
+  const [items, setItems] = useState<Notice[]>([])
+  const [message, setMessage] = useState('')
+
+  const load = async () => {
+    if (!token()) {
+      setItems([])
+      return
+    }
+    const result = await loadUnread()
+    if (!result.ok) {
+      setMessage(result.message)
+      return
+    }
+    setMessage('')
+    setItems(result.items)
+  }
+
+  useEffect(() => {
+    void load()
+    const timer = window.setInterval(() => void load(), 15000)
+    const sync = () => void load()
+    window.addEventListener('community-session', sync)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('community-session', sync)
+    }
+  }, [])
+
+  const view = async (id: string | number) => {
+    const result = await markNoticeRead(id)
+    if (!result.ok) {
+      setMessage(result.message)
+      return
+    }
+    setItems((current) => current.filter((item) => String(item.id) !== String(id)))
+  }
+
+  return (
+    <div className="notify">
+      <button type="button" className="linkish notify-button" onClick={() => setOpen((value) => !value)}>
+        通知
+        {items.length > 0 && <span className="badge">{items.length}</span>}
+      </button>
+      {open && (
+        <div className="notify-panel">
+          {message && <p className="error">{message}</p>}
+          {items.length === 0 && <p className="muted">没有未读通知</p>}
+          {items.map((item) => (
+            <div key={item.id} className="notify-item">
+              <span>{item.content}</span>
+              <button type="button" onClick={() => void view(item.id)}>
+                查看
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function NoticePage() {
@@ -473,22 +549,22 @@ export function NoticePage() {
       go('/login')
       return
     }
-    const result = await api<Notice[]>('/notifications')
-    if (!result.ok || !result.data) {
+    const result = await loadUnread()
+    if (!result.ok) {
       setMessage(result.message)
       return
     }
     setMessage('')
-    setItems(result.data)
+    setItems(result.items)
   }
 
   useEffect(() => {
     void load()
   }, [])
 
-  const markRead = async (id: number) => {
-    const result = await api<string>(`/notifications/${id}/read`, { method: 'POST' })
-    setMessage(result.message)
+  const view = async (id: string | number) => {
+    const result = await markNoticeRead(id)
+    setMessage(result.ok ? '已读' : result.message)
     await load()
   }
 
@@ -496,18 +572,14 @@ export function NoticePage() {
     <section>
       <h2>通知</h2>
       {message && <p className="muted">{message}</p>}
-      {items.length === 0 && <p className="muted">还没有通知。</p>}
+      {items.length === 0 && <p className="muted">没有未读通知</p>}
       <div className="stack">
         {items.map((item) => (
           <article key={item.id} className="card row">
             <span>{item.content}</span>
-            {item.readFlag ? (
-              <span className="muted">已读</span>
-            ) : (
-              <button type="button" onClick={() => void markRead(item.id)}>
-                标为已读
-              </button>
-            )}
+            <button type="button" onClick={() => void view(item.id)}>
+              查看
+            </button>
           </article>
         ))}
       </div>

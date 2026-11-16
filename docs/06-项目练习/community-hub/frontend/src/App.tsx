@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { HotPage, DetailPage, EditorPage, ListPage, LoginPage, NearbyPage, NoticePage, RegisterPage } from './pages.tsx'
+import { HotPage, DetailPage, EditorPage, ListPage, LoginPage, NearbyPage, NoticeBell, NoticePage, RegisterPage } from './pages.tsx'
 import { Link, Router, useGo, usePath } from './router.tsx'
 import { clearSession, token, username } from './session.ts'
 
@@ -23,21 +23,23 @@ function Shell() {
         <Link to="/nearby">附近</Link>
         <Link to="/posts/new">发帖</Link>
         <Link to="/hot">热榜</Link>
-        <Link to="/notifications">通知</Link>
-        {name ? (
-          <button
-            type="button"
-            className="linkish"
-            onClick={() => {
-              clearSession()
-              go('/login')
-            }}
-          >
-            {name} 退出
-          </button>
-        ) : (
-          <Link to="/login">登录</Link>
-        )}
+        <div className="nav-right">
+          {name && <NoticeBell />}
+          {name ? (
+            <button
+              type="button"
+              className="linkish"
+              onClick={() => {
+                clearSession()
+                go('/login')
+              }}
+            >
+              {name} 退出
+            </button>
+          ) : (
+            <Link to="/login">登录</Link>
+          )}
+        </div>
       </header>
       <main>{token() || page.public ? page.node : <LoginPage />}</main>
     </>
