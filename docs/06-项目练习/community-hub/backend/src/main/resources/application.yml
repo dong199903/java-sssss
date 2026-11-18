@@ -6,10 +6,6 @@ spring:
     name: community-hub
   jackson:
     time-zone: Asia/Shanghai
-  datasource:
-    url: jdbc:mysql://127.0.0.1:3306/community?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: ""
   data:
     redis:
       host: 127.0.0.1
@@ -20,7 +16,21 @@ spring:
     username: guest
     password: guest
 
+# 从库先指向同一台 MySQL。真正换从库时只改 slave 的地址。
 community:
+  datasource:
+    master:
+      pool-name: master
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      jdbc-url: jdbc:mysql://127.0.0.1:3306/community?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password: ""
+    slave:
+      pool-name: slave
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      jdbc-url: jdbc:mysql://127.0.0.1:3306/community?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password: ""
   jwt:
     secret: community-hub-dev-secret-key-32b
     expire-days: 7

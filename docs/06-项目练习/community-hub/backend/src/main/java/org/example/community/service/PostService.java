@@ -31,6 +31,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.example.community.dto.NotifyDto;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.example.community.config.RoutingDataSource;
+import org.example.community.config.DataSourceContext;
 @Service
 @EnableScheduling
 public class PostService {
@@ -43,7 +45,6 @@ public class PostService {
   private final RedissonClient redissonClient;
   private final ObjectMapper objectMapper;
   private final RabbitTemplate rabbitTemplate;
-
   public PostService(PostMapper postMapper, UserService userService, AdminOpLogMapper adminOpLogMapper,
       StringRedisTemplate stringRedisTemplate, RedissonClient redissonClient, ObjectMapper objectMapper,
       RabbitTemplate rabbitTemplate) {
@@ -61,7 +62,12 @@ public class PostService {
   }
 
   public List<PostDto> getPostList(int communityId, Date lastCreateTime, Long lastId) {
-    return toPostDtos(postMapper.selectByCommunityId(communityId, 10, lastCreateTime, lastId));
+    try {
+      DataSourceContext.useSlave();
+      return toPostDtos(postMapper.selectByCommunityId(communityId, 10, lastCreateTime, lastId));
+    } finally {
+      DataSourceContext.clear();
+    }
   }
   @Scheduled(fixedDelay = 5 * 60 * 1000)
   public void cleanViewCache() {
@@ -221,8 +227,13 @@ public class PostService {
 
   public List<PostDto> getNearbyPosts(double latitude, double longitude, Date lastCreateTime, Long lastId) {
     String geohashStart = GeoHash.encode(latitude, longitude, 5);
-    String geohashEnd = GeoHash.nextPrefix(geohashStart);
-    return toPostDtos(postMapper.selectNearby(geohashStart, geohashEnd, 10, lastCreateTime, lastId));
+    String geohashEnd = GeoHash.nextPrefix(geohashStart); 
+    try {
+      DataSourceContext.useSlave();
+      return toPostDtos(postMapper.selectNearby(geohashStart, geohashEnd, 10, lastCreateTime, lastId));
+    } finally {
+      DataSourceContext.clear();
+    }
   }
 
   private List<PostDto> toPostDtos(List<Post> posts) {
@@ -529,7 +540,12 @@ public class PostService {
 
   public List<PostDto> getPostsByIds(List<String> postIds) {
     List<String> ids = new ArrayList<String>(postIds);
-    List<Post> posts = postMapper.selectByIds(ids);
-    return toPostDtos(posts);
+    try {
+      DataSourceContext.useSlave();
+      List<Post> posts = postMapper.selectByIds(ids);
+      return toPostDtos(posts);
+    } finally {
+      DataSourceContext.clear();
+    }
   }
 }

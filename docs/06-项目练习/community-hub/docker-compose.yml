@@ -8,6 +8,7 @@ services:
       - "3306:3306"
     volumes:
       - ./backend/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./services/sql/01-databases.sql:/docker-entrypoint-initdb.d/02-databases.sql:ro
   redis:
     image: redis:7
     ports:
@@ -17,23 +18,90 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-  backend:
-    build: ./backend
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+  gateway:
+    build:
+      context: ./services
+      args:
+        MODULE: gateway
+    depends_on:
+      - nacos
+    environment:
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    ports:
+      - "8080:8080"
+  user-service:
+    build:
+      context: ./services
+      args:
+        MODULE: user-service
+    depends_on:
+      - mysql
+      - nacos
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/community_user?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    ports:
+      - "8081:8081"
+  content-service:
+    build:
+      context: ./services
+      args:
+        MODULE: content-service
     depends_on:
       - mysql
       - redis
       - rabbitmq
+      - nacos
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/community?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/community_content?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       SPRING_DATA_REDIS_HOST: redis
       SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
     ports:
-      - "8080:8080"
+      - "8082:8082"
+  interaction-service:
+    build:
+      context: ./services
+      args:
+        MODULE: interaction-service
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+      - nacos
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/community_interaction?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    ports:
+      - "8083:8083"
+  notify-service:
+    build:
+      context: ./services
+      args:
+        MODULE: notify-service
+    depends_on:
+      - mysql
+      - rabbitmq
+      - nacos
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/community_notify?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    ports:
+      - "8084:8084"
   frontend:
     build: ./frontend
     depends_on:
-      - backend
+      - gateway
     ports:
       - "5173:80"

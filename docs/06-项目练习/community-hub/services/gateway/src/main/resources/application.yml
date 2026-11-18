@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+    gateway:
+      routes:
+        - id: user-auth
+          uri: lb://user-service
+          predicates:
+            - Path=/api/auth/**
+        - id: user-users
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**
+        - id: user-admin
+          uri: lb://user-service
+          predicates:
+            - Path=/api/admin/**
+        - id: interaction-likes
+          uri: lb://interaction-service
+          order: -1
+          predicates:
+            - Path=/api/posts/*/likes,/api/posts/*/likes/**
+        - id: interaction-favorites
+          uri: lb://interaction-service
+          order: -1
+          predicates:
+            - Path=/api/posts/*/favorites,/api/posts/*/favorites/**
+        - id: interaction-ranks
+          uri: lb://interaction-service
+          predicates:
+            - Path=/api/ranks/**,/rank/**
+        - id: content-posts
+          uri: lb://content-service
+          order: 1
+          predicates:
+            - Path=/api/posts/**
+        - id: notify
+          uri: lb://notify-service
+          predicates:
+            - Path=/api/notifications/**
+
+community:
+  jwt:
+    secret: community-hub-dev-secret-key-32b
